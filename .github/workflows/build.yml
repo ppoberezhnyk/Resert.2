@@ -1,0 +1,77 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build-ios:
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip Source Code
+        run: |
+          find . -maxdepth 1 -name "*.zip" -exec unzip -o {} \;
+
+      - name: Clean Up SettingsView Code
+        run: |
+          find . -name "SettingsView.swift" -exec sed -i '' 's/, *keyboard:[^)]*//g' {} +
+          find . -name "SettingsView.swift" -exec sed -i '' 's/, *keyboardType:[^)]*//g' {} +
+
+      - name: Compile iOS Binary
+        run: |
+          mkdir -p Payload/ResertAI.app
+          
+          SWIFT_FILES=$(find . -name "*.swift" ! -path "*/Preview Content/*")
+          
+          xcrun -sdk iphoneos swiftc $SWIFT_FILES \
+            -parse-as-library \
+            -framework SwiftUI \
+            -framework UIKit \
+            -target arm64-apple-ios17.0 \
+            -o Payload/ResertAI.app/ResertAI
+
+      - name: Create Fullscreen Info.plist
+        run: |
+          cat <<EOF > Payload/ResertAI.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.plist">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>ResertAI</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.resert.ai</string>
+              <key>CFBundleName</key>
+              <string>ResertAI</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>MinimumOSVersion</key>
+              <string>17.0</string>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>UISupportedInterfaceOrientations</key>
+              <array>
+                  <string>UIInterfaceOrientationPortrait</string>
+              </array>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Package IPA
+        run: |
+          zip -r ResertAI.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ResertAI-iOS-IPA
+          path: ResertAI.ipa
